@@ -21,13 +21,13 @@ pygame.display.set_caption("2D Platformer")
 clock = pygame.time.Clock()
 
 # Player properties
-player_size = 50
+player_size = 20
 player_x = SCREEN_WIDTH // 2
 player_y = SCREEN_HEIGHT - player_size
 player_speed = 5
 player_velocity_y = 0
 gravity = 0.5
-jump_power = -10
+jump_power = -12
 is_jumping = False
 
 # Define platforms
