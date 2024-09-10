@@ -107,7 +107,7 @@ def game_loop():
     global player_x, player_y, player_velocity_y, is_jumping, platforms, drawing, start_pos, camera_x, camera_y
 
     # Create grass texture
-    grass_texture = create_grass_texture(100, 50)  # Create a 100x50 grass texture
+    grass_texture = create_grass_texture(100, 10)  # Create a 100x50 grass texture
 
     while True:
         for event in pygame.event.get():
