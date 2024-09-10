@@ -8,10 +8,36 @@ pygame.init()
 SCREEN_WIDTH = 800
 SCREEN_HEIGHT = 600
 WHITE = (255, 255, 255)
-BLACK = (0, 0, 0)
 RED = (255, 0, 0)
-GREEN = (0, 255, 0)
 BLUE = (0, 0, 255)
+
+
+# Function to create a grass texture
+def create_grass_texture(width, height):
+    """Creates a grass texture using a simple algorithm.
+
+    Args:
+        width: The width of the texture.
+        height: The height of the texture.
+
+    Returns:
+        A pygame Surface object representing the grass texture.
+    """
+    surface = pygame.Surface((width, height))
+    surface.fill((0, 128, 0))  # Base green color
+
+    # Add some variation for a natural look
+    for x in range(width):
+        for y in range(height):
+            color_variation = pygame.Color(0, 0, 0, 10)  # Slight dark variation
+            current_color = surface.get_at((x, y))
+            new_color = (min(current_color.r + color_variation.r, 255),
+                         min(current_color.g + color_variation.g, 255),
+                         min(current_color.b + color_variation.b, 255))
+            surface.set_at((x, y), new_color)
+
+    return surface
+
 
 # Setup the screen
 screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
@@ -32,7 +58,14 @@ is_jumping = False
 
 # Define platforms
 platforms = [
-    pygame.Rect(0, SCREEN_HEIGHT - 50, SCREEN_WIDTH * 3, 50)  # Ground platform
+    pygame.Rect(0, SCREEN_HEIGHT - 50, SCREEN_WIDTH * 3, 50),
+    pygame.Rect(10, 10, 20, 10),
+    pygame.Rect(50, 200, 100, 10),
+    pygame.Rect(50, 275, 100, 10),
+    pygame.Rect(185, 340, 100, 10),
+    pygame.Rect(355, 425, 100, 10),
+    pygame.Rect(50, 500, 300, 10),
+    pygame.Rect(1000, 500, 300, 10)  # Ground platform
 ]
 
 # Scrolling variables
@@ -42,17 +75,25 @@ camera_y = 0
 drawing = False
 start_pos = None
 
+
 def draw_player(x, y):
     pygame.draw.rect(screen, RED, (x - camera_x, y - camera_y, player_size, player_size))
 
-def draw_platforms():
+
+def draw_platforms(texture):
+    """Draws platforms with the given texture, tiling as necessary."""
+    texture_width, texture_height = texture.get_size()
     for platform in platforms:
-        pygame.draw.rect(screen, GREEN, (platform.x - camera_x, platform.y - camera_y, platform.width, platform.height))
+        # Tile the texture across the platform
+        for x in range(platform.x - camera_x, platform.x - camera_x + platform.width, texture_width):
+            for y in range(platform.y - camera_y, platform.y - camera_y + platform.height, texture_height):
+                screen.blit(texture, (x, y))
+
 
 def check_collisions(x, y, velocity_y):
     for platform in platforms:
         if (x + player_size > platform.x and x < platform.x + platform.width and
-            y + player_size > platform.y and y < platform.y + platform.height):
+                y + player_size > platform.y and y < platform.y + platform.height):
             if velocity_y > 0:  # Falling down
                 y = platform.y - player_size
                 return y, 0, False
@@ -61,8 +102,12 @@ def check_collisions(x, y, velocity_y):
                 return y, 0, is_jumping
     return y, velocity_y, is_jumping
 
+
 def game_loop():
     global player_x, player_y, player_velocity_y, is_jumping, platforms, drawing, start_pos, camera_x, camera_y
+
+    # Create grass texture
+    grass_texture = create_grass_texture(100, 50)  # Create a 100x50 grass texture
 
     while True:
         for event in pygame.event.get():
@@ -87,7 +132,7 @@ def game_loop():
                     height = abs(y2 - y1)
                     x = min(x1, x2)
                     y = min(y1, y2)
-                    platforms.append(pygame.Rect(x + camera_x, y + camera_y, width, height))
+                    platforms.append(pygame.Rect(x - camera_x, y - camera_y, width, height))
                     start_pos = None
 
         keys = pygame.key.get_pressed()
@@ -121,8 +166,8 @@ def game_loop():
         # Clear the screen
         screen.fill(WHITE)
 
-        # Draw platforms
-        draw_platforms()
+        # Draw platforms with texture
+        draw_platforms(grass_texture)
 
         # Draw player
         draw_player(player_x, player_y)
@@ -136,13 +181,15 @@ def game_loop():
             height = abs(y2 - y1)
             x = min(x1, x2)
             y = min(y1, y2)
-            pygame.draw.rect(screen, BLUE, (x - camera_x, y - camera_y, width, height), 2)  # Outline the platform being drawn
+            pygame.draw.rect(screen, BLUE, (x - camera_x, y - camera_y, width, height),
+                             2)  # Outline the platform being drawn
 
         # Update the display
         pygame.display.flip()
 
         # Cap the frame rate
         clock.tick(60)
+
 
 if __name__ == "__main__":
     game_loop()
