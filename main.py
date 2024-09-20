@@ -18,19 +18,11 @@ FALL_THRESHOLD = SCREEN_HEIGHT + 100  # If player falls below this Y-coordinate,
 def create_grass_texture(width, height):
     surface = pygame.Surface((width, height))
     surface.fill((0, 128, 0))  # Base green color
-    for x in range(width):
-        for y in range(height):
-            color_variation = pygame.Color(0, 0, 0, 10)
-            current_color = surface.get_at((x, y))
-            new_color = (min(current_color.r + color_variation.r, 255),
-                         min(current_color.g + color_variation.g, 255),
-                         min(current_color.b + color_variation.b, 255))
-            surface.set_at((x, y), new_color)
     return surface
 
 # Setup the screen
 screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
-pygame.display.set_caption("2D Platformer")
+pygame.display.set_caption("2D Platformer with Moving Platforms")
 
 # Clock for controlling the frame rate
 clock = pygame.time.Clock()
@@ -45,26 +37,18 @@ gravity = 0.5
 jump_power = -10
 is_jumping = False
 
-# Define platforms
+# Define static platforms
 platforms = [
     pygame.Rect(0, SCREEN_HEIGHT - 50, SCREEN_WIDTH, 50),
     pygame.Rect(100, SCREEN_HEIGHT - 100, 80, 10),
     pygame.Rect(200, SCREEN_HEIGHT - 100, 80, 10),
-    pygame.Rect(300, SCREEN_HEIGHT - 100, 80, 10),
-    pygame.Rect(400, SCREEN_HEIGHT - 100, 80, 10),
-    pygame.Rect(90, SCREEN_HEIGHT - 200, 100, 10),
-    pygame.Rect(220, SCREEN_HEIGHT - 200, 100, 10),
-    pygame.Rect(350, SCREEN_HEIGHT - 200, 100, 10),
-    pygame.Rect(480, SCREEN_HEIGHT - 200, 100, 10),
-    pygame.Rect(610, SCREEN_HEIGHT - 200, 100, 10),
-    pygame.Rect(130, SCREEN_HEIGHT - 300, 70, 10),
-    pygame.Rect(220, SCREEN_HEIGHT - 350, 70, 10),
-    pygame.Rect(310, SCREEN_HEIGHT - 400, 70, 10),
-    pygame.Rect(400, SCREEN_HEIGHT - 450, 70, 10),
-    pygame.Rect(490, SCREEN_HEIGHT - 500, 70, 10),
-    pygame.Rect(580, SCREEN_HEIGHT - 550, 70, 10),
-    pygame.Rect(670, SCREEN_HEIGHT - 600, 70, 10),
-    pygame.Rect(800, SCREEN_HEIGHT - 650, 120, 10)
+]
+
+# Define moving platforms
+moving_platforms = [
+    {"rect": pygame.Rect(100, SCREEN_HEIGHT - 200, 100, 10), "speed_x": 2, "speed_y": 0, "direction_x": 1, "direction_y": 0},
+    {"rect": pygame.Rect(400, SCREEN_HEIGHT - 300, 150, 10), "speed_x": 3, "speed_y": 0, "direction_x": 1, "direction_y": 0},
+    {"rect": pygame.Rect(600, SCREEN_HEIGHT - 400, 100, 10), "speed_x": 0, "speed_y": 2, "direction_x": 0, "direction_y": 1},
 ]
 
 # Scrolling variables
@@ -80,12 +64,37 @@ def draw_player(x, y):
 def draw_platforms(texture):
     texture_width, texture_height = texture.get_size()
     for platform in platforms:
-        for x in range(platform.x - camera_x, platform.x - camera_x + platform.width, texture_width):
-            for y in range(platform.y - camera_y, platform.y - camera_y + platform.height, texture_height):
+        for x in range(int(platform.x - camera_x), int(platform.x - camera_x + platform.width), texture_width):
+            for y in range(int(platform.y - camera_y), int(platform.y - camera_y + platform.height), texture_height):
                 screen.blit(texture, (x, y))
 
-def check_collisions(x, y, velocity_y):
+def draw_moving_platforms(texture):
+    texture_width, texture_height = texture.get_size()
+    for platform in moving_platforms:
+        rect = platform["rect"]
+        for x in range(int(rect.x - camera_x), int(rect.x - camera_x + rect.width), texture_width):
+            for y in range(int(rect.y - camera_y), int(rect.y - camera_y + rect.height), texture_height):
+                screen.blit(texture, (x, y))
+
+def move_platforms():
+    for platform in moving_platforms:
+        platform["rect"].x += platform["speed_x"] * platform["direction_x"]
+        platform["rect"].y += platform["speed_y"] * platform["direction_y"]
+
+        # Horizontal boundaries for left-right movement
+        if platform["rect"].x < 0 or platform["rect"].x + platform["rect"].width > 3000:  # Limit to large area
+            platform["direction_x"] *= -1
+
+        # Vertical boundaries for up-down movement
+        if platform["rect"].y < 0 or platform["rect"].y + platform["rect"].height > SCREEN_HEIGHT:
+            platform["direction_y"] *= -1
+
+def check_collisions(x, y, velocity_y, drop_through):
+    # Check collisions with static platforms
     for platform in platforms:
+        if drop_through and velocity_y > 0:  # Drop through platforms only when falling
+            continue
+
         if (x + player_size > platform.x and x < platform.x + platform.width and
                 y + player_size > platform.y and y < platform.y + platform.height):
             if velocity_y > 0:
@@ -94,6 +103,22 @@ def check_collisions(x, y, velocity_y):
             elif velocity_y < 0:
                 y = platform.y + platform.height
                 return y, 0, is_jumping
+
+    # Check collisions with moving platforms
+    for platform in moving_platforms:
+        if drop_through and velocity_y > 0:  # Drop through moving platforms
+            continue
+
+        rect = platform["rect"]
+        if (x + player_size > rect.x and x < rect.x + rect.width and
+                y + player_size > rect.y and y < rect.y + rect.height):
+            if velocity_y > 0:
+                y = rect.y - player_size
+                return y, 0, False
+            elif velocity_y < 0:
+                y = rect.y + rect.height
+                return y, 0, is_jumping
+
     return y, velocity_y, is_jumping
 
 def respawn_player():
@@ -103,6 +128,7 @@ def respawn_player():
     player_velocity_y = 0
     is_jumping = False
 
+# Main game loop
 def game_loop():
     global player_x, player_y, player_velocity_y, is_jumping, platforms, drawing, start_pos, camera_x, camera_y
 
@@ -114,35 +140,18 @@ def game_loop():
                 pygame.quit()
                 sys.exit()
 
-            if event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_d:
-                    drawing = not drawing
-
-            if event.type == pygame.MOUSEBUTTONDOWN:
-                if drawing:
-                    start_pos = pygame.mouse.get_pos()
-
-            if event.type == pygame.MOUSEBUTTONUP:
-                if drawing and start_pos:
-                    end_pos = pygame.mouse.get_pos()
-                    x1, y1 = start_pos
-                    x2, y2 = end_pos
-                    width = abs(x2 - x1)
-                    height = abs(y2 - y1)
-                    x = min(x1, x2)
-                    y = min(y1, y2)
-                    platforms.append(pygame.Rect(x - camera_x, y - camera_y, width, height))
-                    start_pos = None
-
         keys = pygame.key.get_pressed()
 
-        if keys[pygame.K_LEFT]:
+        # WASD controls
+        if keys[pygame.K_a]:  # Move left with 'A'
             player_x -= player_speed
-        if keys[pygame.K_RIGHT]:
+        if keys[pygame.K_d]:  # Move right with 'D'
             player_x += player_speed
-        if keys[pygame.K_SPACE] and not is_jumping:
+        if keys[pygame.K_w] and not is_jumping:  # Jump with 'W'
             player_velocity_y = jump_power
             is_jumping = True
+
+        drop_through = keys[pygame.K_s]  # Holding 'S' to drop through platforms
 
         player_velocity_y += gravity
         player_y += player_velocity_y
@@ -151,30 +160,24 @@ def game_loop():
         if player_y > FALL_THRESHOLD:
             respawn_player()
 
-        player_y, player_velocity_y, is_jumping = check_collisions(player_x, player_y, player_velocity_y)
+        # Move moving platforms
+        move_platforms()
 
+        # Check for platform collisions, with drop-through support
+        player_y, player_velocity_y, is_jumping = check_collisions(player_x, player_y, player_velocity_y, drop_through)
+
+        # Camera follow player
         camera_x = player_x - SCREEN_WIDTH // 2
         camera_y = player_y - SCREEN_HEIGHT // 2
 
-        max_camera_x = max(0, max(p.x + p.width for p in platforms) - SCREEN_WIDTH)
-        max_camera_y = max(0, max(p.y + p.height for p in platforms) - SCREEN_HEIGHT)
-        camera_x = min(max(camera_x, 0), max_camera_x)
-        camera_y = min(max(camera_y, 0), max_camera_y)
-
         screen.fill(WHITE)
 
+        # Draw static and moving platforms
         draw_platforms(grass_texture)
-        draw_player(player_x, player_y)
+        draw_moving_platforms(grass_texture)
 
-        if drawing and start_pos:
-            current_pos = pygame.mouse.get_pos()
-            x1, y1 = start_pos
-            x2, y2 = current_pos
-            width = abs(x2 - x1)
-            height = abs(y2 - y1)
-            x = min(x1, x2)
-            y = min(y1, y2)
-            pygame.draw.rect(screen, BLUE, (x - camera_x, y - camera_y, width, height), 2)
+        # Draw player
+        draw_player(player_x, player_y)
 
         pygame.display.flip()
         clock.tick(60)
