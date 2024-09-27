@@ -45,7 +45,7 @@ is_jumping = False
 camera_x = 0
 
 # Feather platform (to the right)
-feather_platform = pygame.Rect(WORLD_WIDTH - 150, SCREEN_HEIGHT - 150, PLATFORM_WIDTH, PLATFORM_HEIGHT)
+feather_platform = pygame.Rect(WORLD_WIDTH - 5, 0, 10, SCREEN_HEIGHT)
 
 # Create a list of static platforms, randomly generated
 def generate_random_platforms(num_platforms, platform_width, world_width, screen_height):
@@ -54,7 +54,7 @@ def generate_random_platforms(num_platforms, platform_width, world_width, screen
 
     for _ in range(num_platforms):
         # Randomize gaps between platforms
-        gap = random.randint(100, 200)
+        gap = random.randint(120, 200)
         current_x += gap
 
         if current_x + platform_width > world_width:
