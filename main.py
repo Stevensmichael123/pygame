@@ -11,11 +11,16 @@ SCREEN_HEIGHT = 600
 WHITE = (255, 255, 255)
 RED = (255, 0, 0)
 BLUE = (0, 0, 255)
+LIGHT_BLUE = (173, 216, 230)  # Light blue color for the background
 RESPAWN_X = SCREEN_WIDTH // 2
 RESPAWN_Y = SCREEN_HEIGHT // 2
 FALL_THRESHOLD = SCREEN_HEIGHT + 100  # If player falls below this Y-coordinate, respawn
 PLATFORM_HEIGHT = 10
+PLATFORM_WIDTH = 100
 GRASS_COLOR = (0, 128, 0)
+
+# Feather platform color
+FEATHER_PLATFORM_COLOR = (255, 255, 0)
 
 # Number of screens worth of width
 WORLD_WIDTH = SCREEN_WIDTH * 5  # Extending the world to 5 times the screen width
@@ -40,6 +45,9 @@ is_jumping = False
 # Scrolling variables
 camera_x = 0
 camera_y = 0
+
+# Feather platform (to the right)
+feather_platform = pygame.Rect(WORLD_WIDTH - 150, SCREEN_HEIGHT - 150, PLATFORM_WIDTH, PLATFORM_HEIGHT)
 
 # Create a list of static platforms, randomly generated
 def generate_random_platforms(num_platforms, platform_width, world_width, screen_height):
@@ -85,6 +93,9 @@ def draw_platforms(texture):
             for y in range(int(platform.y - camera_y), int(platform.y - camera_y + platform.height), texture_height):
                 screen.blit(texture, (x, y))
 
+def draw_feather_platform():
+    pygame.draw.rect(screen, FEATHER_PLATFORM_COLOR, (feather_platform.x - camera_x, feather_platform.y - camera_y, feather_platform.width, feather_platform.height))
+
 def check_collisions(x, y, velocity_y, drop_through):
     # Check collisions with static platforms
     for platform in platforms:
@@ -102,18 +113,28 @@ def check_collisions(x, y, velocity_y, drop_through):
 
     return y, velocity_y, is_jumping
 
+# Function to ensure a platform is always under the player when respawned
+def ensure_platform_below_player():
+    platform = pygame.Rect(player_x - PLATFORM_WIDTH // 2, RESPAWN_Y + player_size, PLATFORM_WIDTH, PLATFORM_HEIGHT)
+    platforms.append(platform)
+
 def respawn_player():
-    global player_x, player_y, player_velocity_y, is_jumping
+    global player_x, player_y, player_velocity_y, is_jumping, platforms
     player_x = RESPAWN_X
     player_y = RESPAWN_Y
     player_velocity_y = 0
     is_jumping = False
+    platforms = generate_random_platforms(50, 100, WORLD_WIDTH, SCREEN_HEIGHT)  # Regenerate platforms
+    ensure_platform_below_player()  # Ensure a platform is below the player on respawn
 
 # Main game loop
 def game_loop():
     global player_x, player_y, player_velocity_y, is_jumping, platforms, camera_x, camera_y
 
     grass_texture = create_grass_texture(100, PLATFORM_HEIGHT)
+
+    # Ensure a platform is below the player at game start
+    ensure_platform_below_player()
 
     while True:
         for event in pygame.event.get():
@@ -144,14 +165,23 @@ def game_loop():
         # Check for platform collisions, with drop-through support
         player_y, player_velocity_y, is_jumping = check_collisions(player_x, player_y, player_velocity_y, drop_through)
 
+        # Check if player lands on the feather platform
+        if (player_x + player_size > feather_platform.x and player_x < feather_platform.x + feather_platform.width and
+                player_y + player_size > feather_platform.y and player_y < feather_platform.y + feather_platform.height):
+            respawn_player()  # Regenerate the map and respawn the player
+
         # Camera follow player, within bounds of the extended world
         camera_x = max(0, min(player_x - SCREEN_WIDTH // 2, WORLD_WIDTH - SCREEN_WIDTH))
         camera_y = max(0, min(player_y - SCREEN_HEIGHT // 2, SCREEN_HEIGHT - SCREEN_HEIGHT))
 
-        screen.fill(WHITE)
+        # Set the background color to light blue
+        screen.fill(LIGHT_BLUE)
 
         # Draw static platforms
         draw_platforms(grass_texture)
+
+        # Draw feather platform
+        draw_feather_platform()
 
         # Draw player
         draw_player(player_x, player_y)
