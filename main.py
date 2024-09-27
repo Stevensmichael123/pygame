@@ -1,5 +1,6 @@
 import pygame
 import sys
+import random
 
 # Initialize Pygame
 pygame.init()
@@ -13,16 +14,15 @@ BLUE = (0, 0, 255)
 RESPAWN_X = SCREEN_WIDTH // 2
 RESPAWN_Y = SCREEN_HEIGHT // 2
 FALL_THRESHOLD = SCREEN_HEIGHT + 100  # If player falls below this Y-coordinate, respawn
+PLATFORM_HEIGHT = 10
+GRASS_COLOR = (0, 128, 0)
 
-# Function to create a grass texture
-def create_grass_texture(width, height):
-    surface = pygame.Surface((width, height))
-    surface.fill((0, 128, 0))  # Base green color
-    return surface
+# Number of screens worth of width
+WORLD_WIDTH = SCREEN_WIDTH * 5  # Extending the world to 5 times the screen width
 
 # Setup the screen
 screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
-pygame.display.set_caption("2D Platformer with Moving Platforms")
+pygame.display.set_caption("2D Platformer with Extended Randomized Platforms")
 
 # Clock for controlling the frame rate
 clock = pygame.time.Clock()
@@ -37,26 +37,43 @@ gravity = 0.5
 jump_power = -10
 is_jumping = False
 
-# Define static platforms
-platforms = [
-    pygame.Rect(0, SCREEN_HEIGHT - 50, SCREEN_WIDTH, 50),
-    pygame.Rect(100, SCREEN_HEIGHT - 100, 80, 10),
-    pygame.Rect(200, SCREEN_HEIGHT - 100, 80, 10),
-]
-
-# Define moving platforms
-moving_platforms = [
-    {"rect": pygame.Rect(100, SCREEN_HEIGHT - 200, 100, 10), "speed_x": 2, "speed_y": 0, "direction_x": 1, "direction_y": 0},
-    {"rect": pygame.Rect(400, SCREEN_HEIGHT - 300, 150, 10), "speed_x": 3, "speed_y": 0, "direction_x": 1, "direction_y": 0},
-    {"rect": pygame.Rect(600, SCREEN_HEIGHT - 400, 100, 10), "speed_x": 0, "speed_y": 2, "direction_x": 0, "direction_y": 1},
-]
-
 # Scrolling variables
 camera_x = 0
 camera_y = 0
 
-drawing = False
-start_pos = None
+# Create a list of static platforms, randomly generated
+def generate_random_platforms(num_platforms, platform_width, world_width, screen_height):
+    platforms = []
+    current_x = 0  # Start from the left side
+    platform_y = screen_height - 50  # Start with the ground level
+
+    for _ in range(num_platforms):
+        # Randomize gaps between platforms
+        gap = random.randint(100, 200)
+        current_x += gap
+
+        if current_x + platform_width > world_width:
+            break  # Stop if we're beyond the world width
+
+        # Randomize the Y position of the platform to add vertical variation
+        platform_y = random.randint(screen_height - 200, screen_height - 100)
+
+        platform = pygame.Rect(current_x, platform_y, platform_width, PLATFORM_HEIGHT)
+        platforms.append(platform)
+
+        # Move current_x forward by the width of the platform
+        current_x += platform_width
+
+    return platforms
+
+# Generate random platforms that go across the entire extended world
+platforms = generate_random_platforms(50, 100, WORLD_WIDTH, SCREEN_HEIGHT)
+
+# Function to create a grass texture
+def create_grass_texture(width, height):
+    surface = pygame.Surface((width, height))
+    surface.fill(GRASS_COLOR)  # Base green color
+    return surface
 
 def draw_player(x, y):
     pygame.draw.rect(screen, RED, (x - camera_x, y - camera_y, player_size, player_size))
@@ -67,27 +84,6 @@ def draw_platforms(texture):
         for x in range(int(platform.x - camera_x), int(platform.x - camera_x + platform.width), texture_width):
             for y in range(int(platform.y - camera_y), int(platform.y - camera_y + platform.height), texture_height):
                 screen.blit(texture, (x, y))
-
-def draw_moving_platforms(texture):
-    texture_width, texture_height = texture.get_size()
-    for platform in moving_platforms:
-        rect = platform["rect"]
-        for x in range(int(rect.x - camera_x), int(rect.x - camera_x + rect.width), texture_width):
-            for y in range(int(rect.y - camera_y), int(rect.y - camera_y + rect.height), texture_height):
-                screen.blit(texture, (x, y))
-
-def move_platforms():
-    for platform in moving_platforms:
-        platform["rect"].x += platform["speed_x"] * platform["direction_x"]
-        platform["rect"].y += platform["speed_y"] * platform["direction_y"]
-
-        # Horizontal boundaries for left-right movement
-        if platform["rect"].x < 0 or platform["rect"].x + platform["rect"].width > 3000:  # Limit to large area
-            platform["direction_x"] *= -1
-
-        # Vertical boundaries for up-down movement
-        if platform["rect"].y < 0 or platform["rect"].y + platform["rect"].height > SCREEN_HEIGHT:
-            platform["direction_y"] *= -1
 
 def check_collisions(x, y, velocity_y, drop_through):
     # Check collisions with static platforms
@@ -104,21 +100,6 @@ def check_collisions(x, y, velocity_y, drop_through):
                 y = platform.y + platform.height
                 return y, 0, is_jumping
 
-    # Check collisions with moving platforms
-    for platform in moving_platforms:
-        if drop_through and velocity_y > 0:  # Drop through moving platforms
-            continue
-
-        rect = platform["rect"]
-        if (x + player_size > rect.x and x < rect.x + rect.width and
-                y + player_size > rect.y and y < rect.y + rect.height):
-            if velocity_y > 0:
-                y = rect.y - player_size
-                return y, 0, False
-            elif velocity_y < 0:
-                y = rect.y + rect.height
-                return y, 0, is_jumping
-
     return y, velocity_y, is_jumping
 
 def respawn_player():
@@ -130,9 +111,9 @@ def respawn_player():
 
 # Main game loop
 def game_loop():
-    global player_x, player_y, player_velocity_y, is_jumping, platforms, drawing, start_pos, camera_x, camera_y
+    global player_x, player_y, player_velocity_y, is_jumping, platforms, camera_x, camera_y
 
-    grass_texture = create_grass_texture(100, 10)
+    grass_texture = create_grass_texture(100, PLATFORM_HEIGHT)
 
     while True:
         for event in pygame.event.get():
@@ -160,21 +141,17 @@ def game_loop():
         if player_y > FALL_THRESHOLD:
             respawn_player()
 
-        # Move moving platforms
-        move_platforms()
-
         # Check for platform collisions, with drop-through support
         player_y, player_velocity_y, is_jumping = check_collisions(player_x, player_y, player_velocity_y, drop_through)
 
-        # Camera follow player
-        camera_x = player_x - SCREEN_WIDTH // 2
-        camera_y = player_y - SCREEN_HEIGHT // 2
+        # Camera follow player, within bounds of the extended world
+        camera_x = max(0, min(player_x - SCREEN_WIDTH // 2, WORLD_WIDTH - SCREEN_WIDTH))
+        camera_y = max(0, min(player_y - SCREEN_HEIGHT // 2, SCREEN_HEIGHT - SCREEN_HEIGHT))
 
         screen.fill(WHITE)
 
-        # Draw static and moving platforms
+        # Draw static platforms
         draw_platforms(grass_texture)
-        draw_moving_platforms(grass_texture)
 
         # Draw player
         draw_player(player_x, player_y)
